@@ -14,64 +14,71 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  name            String
-  phone           String?  @unique
-  password        String
-  balance         Float    @default(0)
-  accountNumber   String   @unique
-  isActive        Boolean  @default(true)
-  role            String
-  createdAt       DateTime @default(now())
-  lastLogin       DateTime?
-  kycStatus       String   @default("pending")
-  twoFactorEnabled Boolean @default(false)
-  pin             String?
-  address         Json?
-  dateOfBirth     String?
-  ssn             String?
-  employmentStatus String?
-  annualIncome    Float?
+  id                   String           @id @default(uuid())
+  email                String           @unique
+  name                 String
+  phone                String?          @unique
+  password             String
+  balance              Float            @default(0)
+  accountNumber        String           @unique
+  isActive             Boolean          @default(true)
+  role                 String
+  createdAt            DateTime         @default(now())
+  lastLogin            DateTime?
+  kycStatus            String           @default("pending")
+  twoFactorEnabled     Boolean          @default(false)
+  pin                  String?
+  address              Json?
+  dateOfBirth          DateTime? // Changed from String? to DateTime?
+  ssn                  String?
+  employmentStatus     String?
+  annualIncome         Float?
+  cards                Card[]           @relation("UserCard") // Opposite for Card.user
+  sentRequests         PaymentRequest[] @relation("RequestFrom") // Opposite for PaymentRequest.fromUser
+  receivedRequests     PaymentRequest[] @relation("RequestTo") // Opposite for PaymentRequest.toUser
+  sentTransactions     Transaction[]    @relation("TransactionFrom") // Opposite for Transaction.fromUser
+  receivedTransactions Transaction[]    @relation("TransactionTo") // Opposite for Transaction.toUser
 }
 
 model Transaction {
-  id            String   @id @default(uuid())
-  fromUserId    String
-  toUserId      String
-  amount        Float
-  type          String
-  status        String
-  description   String
-  reference     String
-  createdAt     DateTime @default(now())
-  completedAt   DateTime?
-  metadata      Json?
-  category      String?
-  location      String?
-  merchantName  String?
+  id           String    @id @default(uuid())
+  fromUserId   String
+  toUserId     String
+  fromUser     User      @relation("TransactionFrom", fields: [fromUserId], references: [id])
+  toUser       User      @relation("TransactionTo", fields: [toUserId], references: [id])
+  amount       Float
+  type         String
+  status       String
+  description  String
+  reference    String
+  createdAt    DateTime  @default(now())
+  completedAt  DateTime?
+  metadata     Json?
+  category     String?
+  location     String?
+  merchantName String?
 }
 
-model paymentRequest {
-  id        String   @id @default(uuid())
-  amount    Float
-  fromUser  User     @relation("RequestFrom", fields: [fromUserId], references: [id])
+model PaymentRequest {
+  id         String   @id @default(uuid())
+  amount     Float
+  fromUser   User     @relation("RequestFrom", fields: [fromUserId], references: [id])
   fromUserId String
-  toUser    User     @relation("RequestTo", fields: [toUserId], references: [id])
-  toUserId  String
-  status    String
-  createdAt DateTime @default(now())
+  toUser     User     @relation("RequestTo", fields: [toUserId], references: [id])
+  toUserId   String
+  status     String
+  createdAt  DateTime @default(now())
 }
 
-model card {
+model Card {
   id              String   @id @default(uuid())
   userId          String
-  user            User     @relation(fields: [userId], references: [id])
-  type            String   // "virtual" or "physical"
+  user            User     @relation("UserCard", fields: [userId], references: [id])
+  type            String // "virtual" or "physical"
   number          String
-  expiryDate      String
-  cvv             String
-  status          String   // "active", "frozen", "cancelled"
+  expiryDate      DateTime // Changed from String to DateTime
+  cvv             String   @default("") @db.Char(4) // Added constraint for CVV (4 digits)
+  status          String // "active", "frozen", "cancelled"
   spendingLimit   Float
   currentSpending Float
   isDefault       Boolean  @default(false)
