@@ -14,6 +14,7 @@ import {
   Settings,
   Bell,
   Activity,
+  ArrowLeft,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +25,7 @@ import { NotificationCenter } from "@/components/notifications/notification-cent
 import { ToastContainer } from "@/components/notifications/notification-toast"
 import { useNotifications } from "@/hooks/use-notifications"
 import Link from "next/link"
+import { TransactionReceipt } from "@/components/receipts/transaction-receipt" // Import TransactionReceipt
 
 // --- Add these types ---
 type User = {
@@ -34,6 +36,7 @@ type User = {
   balance: number
   kycStatus: string
   twoFactorEnabled: boolean
+  phone?: string // Ensure phone is included for receipt details
 }
 
 type Transaction = {
@@ -45,11 +48,19 @@ type Transaction = {
   status: string
   createdAt: string
   type: string
+  reference: string // Added reference for receipt
+  completedAt?: string // Added completedAt for receipt
   metadata?: {
     senderName?: string
     senderEmail?: string
     senderPhone?: string
+    receiverName?: string
+    receiverEmail?: string
+    receiverPhone?: string
   }
+  category?: string // Added category for receipt
+  location?: string // Added location for receipt
+  merchantName?: string // Added merchantName for receipt
 }
 
 export default function DashboardPage() {
@@ -58,6 +69,7 @@ export default function DashboardPage() {
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [showBalance, setShowBalance] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null) // New state for selected transaction
   const router = useRouter()
   const { notifications, unreadCount } = useNotifications()
 
@@ -85,7 +97,11 @@ export default function DashboardPage() {
         const userTransactions = allTransactions.filter(
           (t: Transaction) => t.fromUserId === userData.id || t.toUserId === userData.id,
         )
-        setTransactions(userTransactions.slice(0, 5))
+        // Sort by createdAt descending to get most recent
+        userTransactions.sort(
+          (a: Transaction, b: Transaction) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+        setTransactions(userTransactions.slice(0, 5)) // Show only top 5 recent transactions
       } catch (error) {
         // Optionally show an error toast or message
         console.error("Dashboard fetch error:", error)
@@ -167,6 +183,21 @@ export default function DashboardPage() {
   }
 
   const stats = getQuickStats()
+
+  // Conditional rendering for the receipt view
+  if (selectedTransaction) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="mb-6">
+          <Button variant="outline" onClick={() => setSelectedTransaction(null)} className="bg-transparent">
+            <ArrowLeft className="h-4 w-4 mr-2" /> Back to Dashboard
+          </Button>
+        </div>
+        {/* Ensure user and allUsers are passed correctly */}
+        <TransactionReceipt transaction={selectedTransaction} user={user} allUsers={allUsers} />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
@@ -320,7 +351,10 @@ export default function DashboardPage() {
             ) : (
               transactions.map((transaction, index) => (
                 <div key={transaction.id}>
-                  <div className="flex items-center space-x-3">
+                  <div
+                    className="flex items-center space-x-3 cursor-pointer hover:bg-muted/50 p-2 rounded-md -m-2" // Added hover effect and padding
+                    onClick={() => setSelectedTransaction(transaction)} // Set selected transaction on click
+                  >
                     <div className="flex-shrink-0">
                       <div className="h-10 w-10 bg-muted rounded-full flex items-center justify-center">
                         {getTransactionIcon(transaction)}
@@ -335,8 +369,8 @@ export default function DashboardPage() {
                                 ? `From ${transaction.metadata.senderName}`
                                 : "From ADMIN"
                               : transaction.toUserId === user.id
-                              ? `From ${getOtherPartyName(transaction)}`
-                              : `To ${getOtherPartyName(transaction)}`}
+                                ? `From ${getOtherPartyName(transaction)}`
+                                : `To ${getOtherPartyName(transaction)}`}
                           </p>
                           {transaction.type === "admin_credit" && transaction.metadata?.senderEmail && (
                             <p className="text-xs text-muted-foreground truncate">

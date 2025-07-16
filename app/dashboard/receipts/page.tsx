@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Receipt, Search, Download, Calendar } from "lucide-react"
 import { useAuth } from "@/lib/auth"
-import type { Transaction } from "@/lib/auth"
+import type { Transaction, User } from "@/lib/auth" // Ensure User type is imported
 
 export default function ReceiptsPage() {
   const { user } = useAuth()
@@ -19,10 +19,27 @@ export default function ReceiptsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [allUsers, setAllUsers] = useState<User[]>([]) // New state for all users
 
   useEffect(() => {
     if (user) {
       loadTransactions()
+      // Fetch all users when the current user is available
+      const fetchAllUsers = async () => {
+        try {
+          // Assuming you have an API endpoint that returns all users
+          const response = await fetch("/api/users")
+          if (response.ok) {
+            const usersData = await response.json()
+            setAllUsers(usersData)
+          } else {
+            console.error("Failed to fetch all users:", response.statusText)
+          }
+        } catch (error) {
+          console.error("Error fetching all users:", error)
+        }
+      }
+      fetchAllUsers()
     }
   }, [user])
 
@@ -117,7 +134,8 @@ export default function ReceiptsPage() {
             ← Back to Receipts
           </Button>
         </div>
-        <TransactionReceipt transaction={selectedTransaction} user={user!} />
+        {/* Pass allUsers to TransactionReceipt */}
+        <TransactionReceipt transaction={selectedTransaction} user={user!} allUsers={allUsers} />
       </div>
     )
   }

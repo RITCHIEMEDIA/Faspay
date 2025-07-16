@@ -8,8 +8,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getAllTransactions, getAllUsers, type User, type Transaction } from "@/lib/auth"
+import type { User, Transaction } from "@/lib/auth"
 import Link from "next/link"
+import { TransactionReceipt } from "@/components/receipts/transaction-receipt" // Import the TransactionReceipt component
 
 export default function TransactionHistoryPage() {
   const [user, setUser] = useState<User | null>(null)
@@ -19,6 +20,7 @@ export default function TransactionHistoryPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState<"all" | "send" | "receive" | "deposit">("all")
   const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending" | "failed">("all")
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null) // New state for selected transaction
   const router = useRouter()
 
   useEffect(() => {
@@ -150,6 +152,21 @@ export default function TransactionHistoryPage() {
     )
   }
 
+  // Conditional rendering for the receipt view
+  if (selectedTransaction) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="mb-6">
+          <Button variant="outline" onClick={() => setSelectedTransaction(null)} className="bg-transparent">
+            ← Back to History
+          </Button>
+        </div>
+        {/* Ensure user and allUsers are passed correctly */}
+        <TransactionReceipt transaction={selectedTransaction} user={user} allUsers={allUsers} />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       {/* Header */}
@@ -244,7 +261,11 @@ export default function TransactionHistoryPage() {
               const isOutgoing = amount < 0
 
               return (
-                <Card key={transaction.id} className="hover:bg-accent/50 transition-colors cursor-pointer">
+                <Card
+                  key={transaction.id}
+                  className="hover:bg-accent/50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedTransaction(transaction)} // Set selected transaction on click
+                >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
