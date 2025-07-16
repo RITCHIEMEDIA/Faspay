@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useNotifications } from "@/hooks/use-notifications"
-import PinInput from "@/components/ui/PinInput"
+// import PinInput from "@/components/ui/PinInput"
 import BiometricButton from "@/components/ui/BiometricButton"
 
 export default function AdminSendMoneyPage() {
@@ -35,8 +35,8 @@ export default function AdminSendMoneyPage() {
   const [selectedUser, setSelectedUser] = useState(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [step, setStep] = useState("form")
-  const [pinVerified, setPinVerified] = useState(false)
-  const [showPinModal, setShowPinModal] = useState(false)
+  // const [pinVerified, setPinVerified] = useState(false)
+  // const [showPinModal, setShowPinModal] = useState(false)
   const router = useRouter()
   const { sendTransactionNotification } = useNotifications()
 
@@ -169,28 +169,29 @@ export default function AdminSendMoneyPage() {
     }
   }
 
-  const handlePinCheck = async (pin: string) => {
-    // Verify PIN via API
-    const res = await fetch("/api/admin/verify-pin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
-    })
-    const result = await res.json()
-    if (result.success) {
-      setPinVerified(true)
-      setShowPinModal(false)
-      handleConfirm() // Proceed with transaction
-    } else {
-      alert("Incorrect PIN")
-    }
-  }
+  // const handlePinCheck = async (pin: string) => {
+  //   // Verify PIN via API
+  //   const res = await fetch("/api/admin/verify-pin", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ pin }),
+  //   })
+  //   const result = await res.json()
+  //   if (result.success) {
+  //     setPinVerified(true)
+  //     setShowPinModal(false)
+  //     handleConfirm() // Proceed with transaction
+  //   } 
+    
+  //   else {
+  //     setAlert({ type: "error", message: "Incorrect PIN" })    }
+  // }
 
-  const handleBiometricSuccess = () => {
-    setPinVerified(true)
-    setShowPinModal(false)
-    handleConfirm()
-  }
+  // const handleBiometricSuccess = () => {
+  //   setPinVerified(true)
+  //   setShowPinModal(false)
+  //   handleConfirm()
+  // }
 
   const resetForm = () => {
     setFormData({
@@ -396,7 +397,8 @@ export default function AdminSendMoneyPage() {
                 <Button
                   type="button"
                   className="w-full bg-primary hover:bg-primary/90 text-black"
-                  onClick={() => setShowPinModal(true)}
+                  onClick={() => setShowPinModal(false)}
+                  onClick={handleSubmit}
                   disabled={!selectedUser || !formData.amount || isLoading}
                 >
                   Continue
@@ -578,7 +580,7 @@ export default function AdminSendMoneyPage() {
         </Card>
       )}
 
-      {showPinModal && (
+      {/* {showPinModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-background p-6 rounded-lg shadow-lg w-full max-w-xs">
             <h3 className="text-lg font-semibold mb-2 text-center">Authenticate Transaction</h3>
@@ -589,7 +591,7 @@ export default function AdminSendMoneyPage() {
             </button>
           </div>
         </div>
-      )}
+      )} */}
     </div>
   )
 }

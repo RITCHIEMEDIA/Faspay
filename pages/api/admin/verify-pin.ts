@@ -1,19 +1,46 @@
-import type { NextApiRequest, NextApiResponse } from "next"
-import prisma from "@/lib/db"
-import bcrypt from "bcryptjs"
+// import type { NextApiRequest, NextApiResponse } from "next"
+// import { verifyPin } from "@/lib/db"
+// import { serialize } from "cookie"
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== "POST") return res.status(405).end()
-  const { pin } = req.body
-  if (!pin || !/^\d{4}$/.test(pin)) return res.status(400).json({ success: false, error: "Invalid PIN" })
+// export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+//   if (req.method !== "POST") {
+//     return res.status(405).json({ message: "Method Not Allowed" })
+//   }
 
-  // Get current admin (replace with your auth logic)
-  const adminId = req.cookies.adminId
-  if (!adminId) return res.status(401).json({ success: false, error: "Not authenticated" })
+//   const { pin } = req.body
 
-  const admin = await prisma.user.findUnique({ where: { id: adminId } })
-  if (!admin || !admin.pin) return res.status(404).json({ success: false, error: "PIN not set" })
+//   if (!pin) {
+//     return res.status(400).json({ message: "Pin is required" })
+//   }
 
-  const valid = await bcrypt.compare(pin, admin.pin)
-  res.status(200).json({ success: valid })
-}
+//   try {
+//     const adminId = req.cookies.userId
+
+//     if (!adminId) {
+//       return res.status(401).json({ message: "Unauthorized" })
+//     }
+
+//     const isValid = await verifyPin(adminId, pin)
+
+//     if (!isValid) {
+//       return res.status(401).json({ message: "Invalid Pin" })
+//     }
+
+//     const token = "valid" // Replace with actual token generation logic
+
+//     const serialized = serialize("adminToken", token, {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       sameSite: "strict",
+//       maxAge: 60 * 60 * 24 * 7, // 1 week
+//       path: "/",
+//     })
+
+//     res.setHeader("Set-Cookie", serialized)
+
+//     return res.status(200).json({ message: "Pin Verified" })
+//   } catch (error) {
+//     console.error(error)
+//     return res.status(500).json({ message: "Internal Server Error" })
+//   }
+// }
