@@ -3,7 +3,6 @@
 
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,30 +13,32 @@ datasource db {
 }
 
 model User {
-  id                   String           @id @default(uuid())
-  email                String           @unique
-  name                 String
-  phone                String?          @unique
-  password             String
-  balance              Float            @default(0)
-  accountNumber        String           @unique
-  isActive             Boolean          @default(true)
-  role                 String
-  createdAt            DateTime         @default(now())
-  lastLogin            DateTime?
-  kycStatus            String           @default("pending")
-  twoFactorEnabled     Boolean          @default(false)
-  pin                  String?
-  address              Json?
-  dateOfBirth          DateTime? // Changed from String? to DateTime?
-  ssn                  String?
-  employmentStatus     String?
-  annualIncome         Float?
-  cards                Card[]           @relation("UserCard") // Opposite for Card.user
-  sentRequests         PaymentRequest[] @relation("RequestFrom") // Opposite for PaymentRequest.fromUser
-  receivedRequests     PaymentRequest[] @relation("RequestTo") // Opposite for PaymentRequest.toUser
-  sentTransactions     Transaction[]    @relation("TransactionFrom") // Opposite for Transaction.fromUser
-  receivedTransactions Transaction[]    @relation("TransactionTo") // Opposite for Transaction.toUser
+  id               String    @id @default(uuid())
+  email            String    @unique
+  name             String
+  phone            String?   @unique
+  password         String
+  balance          Float     @default(0)
+  accountNumber    String    @unique
+  isActive         Boolean   @default(true)
+  role             String
+  createdAt        DateTime  @default(now())
+  lastLogin        DateTime?
+  kycStatus        String    @default("pending")
+  twoFactorEnabled Boolean   @default(false)
+  pin              String?
+  address          Json?
+  dateOfBirth      DateTime?
+  ssn              String?
+  employmentStatus String?
+  annualIncome     Float?
+
+  // Inverse relations for other models
+  cards                Card[]           @relation("UserCard")
+  sentRequests         PaymentRequest[] @relation("RequestFrom")
+  receivedRequests     PaymentRequest[] @relation("RequestTo")
+  sentTransactions     Transaction[]    @relation("TransactionFrom")
+  receivedTransactions Transaction[]    @relation("TransactionTo")
 }
 
 model Transaction {
@@ -76,8 +77,8 @@ model Card {
   user            User     @relation("UserCard", fields: [userId], references: [id])
   type            String // "virtual" or "physical"
   number          String
-  expiryDate      DateTime // Changed from String to DateTime
-  cvv             String   @default("") @db.Char(4) // Added constraint for CVV (4 digits)
+  expiryDate      DateTime
+  cvv             String   @default("") @db.Char(4)
   status          String // "active", "frozen", "cancelled"
   spendingLimit   Float
   currentSpending Float
