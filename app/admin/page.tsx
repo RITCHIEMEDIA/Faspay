@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   CheckCircle,
 } from "lucide-react"
-import { getAllUsers, getAllTransactions, type User, type Transaction } from "@/lib/auth"
 import Link from "next/link"
 
 export default function AdminDashboard() {
@@ -30,26 +29,31 @@ export default function AdminDashboard() {
   })
 
   useEffect(() => {
-    const allUsers = getAllUsers()
-    const allTransactions = getAllTransactions()
+    async function fetchData() {
+      const usersRes = await fetch("/api/users")
+      const transactionsRes = await fetch("/api/transactions")
+      const allUsers = await usersRes.json()
+      const allTransactions = await transactionsRes.json()
 
-    setUsers(allUsers)
-    setTransactions(allTransactions)
+      setUsers(allUsers)
+      setTransactions(allTransactions)
 
-    // Calculate stats
-    const activeUsers = allUsers.filter((u) => u.isActive && u.role === "user").length
-    const totalVolume = allTransactions.filter((t) => t.status === "completed").reduce((sum, t) => sum + t.amount, 0)
-    const pendingTransactions = allTransactions.filter((t) => t.status === "pending").length
-    const failedTransactions = allTransactions.filter((t) => t.status === "failed").length
+      // Calculate stats
+      const activeUsers = allUsers.filter((u) => u.isActive && u.role === "user").length
+      const totalVolume = allTransactions.filter((t) => t.status === "completed").reduce((sum, t) => sum + t.amount, 0)
+      const pendingTransactions = allTransactions.filter((t) => t.status === "pending").length
+      const failedTransactions = allTransactions.filter((t) => t.status === "failed").length
 
-    setStats({
-      totalUsers: allUsers.filter((u) => u.role === "user").length,
-      activeUsers,
-      totalTransactions: allTransactions.length,
-      totalVolume,
-      pendingTransactions,
-      failedTransactions,
-    })
+      setStats({
+        totalUsers: allUsers.filter((u) => u.role === "user").length,
+        activeUsers,
+        totalTransactions: allTransactions.length,
+        totalVolume,
+        pendingTransactions,
+        failedTransactions,
+      })
+    }
+    fetchData()
   }, [])
 
   const formatCurrency = (amount: number) => {

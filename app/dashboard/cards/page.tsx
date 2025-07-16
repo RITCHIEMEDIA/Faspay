@@ -24,40 +24,29 @@ interface BankCard {
 
 export default function CardsPage() {
   const [user, setUser] = useState<User | null>(null)
-  const [cards, setCards] = useState<BankCard[]>([
-    {
-      id: "card_1",
-      type: "virtual",
-      number: "4532 1234 5678 9012",
-      expiryDate: "12/27",
-      cvv: "123",
-      status: "active",
-      spendingLimit: 5000,
-      currentSpending: 1250,
-      isDefault: true,
-    },
-    {
-      id: "card_2",
-      type: "physical",
-      number: "4532 9876 5432 1098",
-      expiryDate: "08/26",
-      cvv: "456",
-      status: "active",
-      spendingLimit: 10000,
-      currentSpending: 3200,
-      isDefault: false,
-    },
-  ])
+  const [cards, setCards] = useState<BankCard[]>([])
   const [showCardDetails, setShowCardDetails] = useState<Record<string, boolean>>({})
   const router = useRouter()
 
   useEffect(() => {
-    const userData = localStorage.getItem("faspay_user")
-    if (!userData) {
-      router.push("/auth/login")
-      return
+    async function fetchData() {
+      // Fetch current user
+      const userRes = await fetch("/api/current-user")
+      if (!userRes.ok) {
+        router.push("/auth/login")
+        return
+      }
+      const userData = await userRes.json()
+      setUser(userData)
+
+      // Fetch cards for user
+      const cardsRes = await fetch("/api/cards")
+      if (cardsRes.ok) {
+        const cardsData = await cardsRes.json()
+        setCards(cardsData)
+      }
     }
-    setUser(JSON.parse(userData))
+    fetchData()
   }, [router])
 
   const formatCurrency = (amount: number) => {
@@ -98,6 +87,16 @@ export default function CardsPage() {
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
       default:
         return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300"
+    }
+  }
+
+  const handleCreateVirtualCard = async () => {
+    const res = await fetch("/api/cards", { method: "POST" })
+    if (res.ok) {
+      const newCard = await res.json()
+      setCards((prev) => [newCard, ...prev])
+    } else {
+      alert("Failed to create virtual card.")
     }
   }
 
@@ -264,7 +263,12 @@ export default function CardsPage() {
               Create a virtual card instantly or order a physical card
             </p>
             <div className="space-y-2">
-              <Button className="w-full bg-primary hover:bg-primary/90 text-black">Create Virtual Card</Button>
+              <Button
+                className="w-full bg-primary hover:bg-primary/90 text-black"
+                onClick={handleCreateVirtualCard}
+              >
+                Create Virtual Card
+              </Button>
               <Button variant="outline" className="w-full bg-transparent">
                 Order Physical Card
               </Button>

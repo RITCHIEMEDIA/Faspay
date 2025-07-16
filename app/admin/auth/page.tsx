@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,10 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Shield, AlertCircle } from "lucide-react"
-import { loginAdmin, type AdminCredentials } from "@/lib/auth"
 
 export default function AdminAuthPage() {
-  const [credentials, setCredentials] = useState<AdminCredentials>({
+  const [credentials, setCredentials] = useState({
     email: "",
     password: "",
     twoFactorCode: "",
@@ -29,16 +26,19 @@ export default function AdminAuthPage() {
     setIsLoading(true)
     setError("")
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const res = await fetch("/api/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: credentials.email, password: credentials.password }),
+    })
+    const data = await res.json()
+    setIsLoading(false)
 
-    if (credentials.email === "admin@faspay.com" && credentials.password === "FaspayAdmin2024!") {
+    if (res.ok) {
       setStep("2fa")
     } else {
-      setError("Invalid email or password")
+      setError(data.error || "Invalid email or password")
     }
-
-    setIsLoading(false)
   }
 
   const handle2FASubmit = async (e: React.FormEvent) => {
@@ -46,17 +46,49 @@ export default function AdminAuthPage() {
     setIsLoading(true)
     setError("")
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const res = await fetch("/api/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...credentials }),
+    })
+    const data = await res.json()
+    setIsLoading(false)
 
-    const admin = loginAdmin(credentials)
-    if (admin) {
+    if (res.ok) {
+      // TODO: Store session/cookie here
       router.push("/admin")
     } else {
-      setError("Invalid 2FA code")
+      setError(data.error || "Invalid 2FA code")
     }
+  }
 
-    setIsLoading(false)
+  // const [formData, setFormData] = useState({
+  //   recipientId: "",
+  //   amount: "",
+  //   type: "admin_credit",
+  //   reason: "",
+  //   note: "",
+  //   senderName: admin ? admin.name : "Admin",
+  // })
+
+  const handleSendMoney = async () => {
+    setIsLoading(true)
+    setError("")
+    try {
+      const result = await processTransaction(
+        admin.id,
+        selectedUser.id,
+        amount,
+        `${formData.reason} - ${formData.note}`.trim(),
+        formData.type,
+        formData.senderName
+      )
+      // handle result (show success, update UI, etc.)
+    } catch (error) {
+      setError("Transaction failed")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -86,7 +118,7 @@ export default function AdminAuthPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="admin@faspay.com"
+                  placeholder="admin@gmail.com"
                   value={credentials.email}
                   onChange={(e) => setCredentials((prev) => ({ ...prev, email: e.target.value }))}
                   required
@@ -127,13 +159,13 @@ export default function AdminAuthPage() {
                 <Input
                   id="twoFactorCode"
                   type="text"
-                  placeholder="123456"
+                  placeholder="1234"
                   maxLength={6}
                   value={credentials.twoFactorCode}
                   onChange={(e) => setCredentials((prev) => ({ ...prev, twoFactorCode: e.target.value }))}
                   required
                 />
-                <p className="text-xs text-muted-foreground">Enter the 6-digit code from your authenticator app</p>
+                <p className="text-xs text-muted-foreground">Enter the 2FA code (demo: 1234)</p>
               </div>
 
               <div className="flex space-x-2">
@@ -154,13 +186,6 @@ export default function AdminAuthPage() {
               </div>
             </form>
           )}
-
-          <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-            <h4 className="text-sm font-medium mb-2">Demo Credentials:</h4>
-            <p className="text-xs text-muted-foreground">Email: admin@faspay.com</p>
-            <p className="text-xs text-muted-foreground">Password: FaspayAdmin2024!</p>
-            <p className="text-xs text-muted-foreground">2FA Code: 123456</p>
-          </div>
         </CardContent>
       </Card>
     </div>

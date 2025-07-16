@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  name            String
+  phone           String?  @unique
+  password        String
+  balance         Float    @default(0)
+  accountNumber   String   @unique
+  isActive        Boolean  @default(true)
+  role            String
+  createdAt       DateTime @default(now())
+  lastLogin       DateTime?
+  kycStatus       String   @default("pending")
+  twoFactorEnabled Boolean @default(false)
+  pin             String?
+  address         Json?
+  dateOfBirth     String?
+  ssn             String?
+  employmentStatus String?
+  annualIncome    Float?
+}
+
+model Transaction {
+  id            String   @id @default(uuid())
+  fromUserId    String
+  toUserId      String
+  amount        Float
+  type          String
+  status        String
+  description   String
+  reference     String
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+  metadata      Json?
+  category      String?
+  location      String?
+  merchantName  String?
+}
+
+model paymentRequest {
+  id        String   @id @default(uuid())
+  amount    Float
+  fromUser  User     @relation("RequestFrom", fields: [fromUserId], references: [id])
+  fromUserId String
+  toUser    User     @relation("RequestTo", fields: [toUserId], references: [id])
+  toUserId  String
+  status    String
+  createdAt DateTime @default(now())
+}
+
+model card {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  type            String   // "virtual" or "physical"
+  number          String
+  expiryDate      String
+  cvv             String
+  status          String   // "active", "frozen", "cancelled"
+  spendingLimit   Float
+  currentSpending Float
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}

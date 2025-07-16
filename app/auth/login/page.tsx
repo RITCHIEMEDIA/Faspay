@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -24,23 +22,19 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-
-    // Simulate authentication
-    setTimeout(() => {
-      // Store user session (in a real app, this would be handled by your auth system)
-      localStorage.setItem(
-        "faspay_user",
-        JSON.stringify({
-          id: "1",
-          email: formData.email,
-          name: "John Doe",
-          balance: 2500.0,
-        }),
-      )
-
-      setIsLoading(false)
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    })
+    const data = await res.json()
+    setIsLoading(false)
+    if (res.ok) {
+      // TODO: Store session/cookie here
       router.push("/dashboard")
-    }, 1500)
+    } else {
+      alert(data.error || "Login failed")
+    }
   }
 
   return (

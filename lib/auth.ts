@@ -1,5 +1,9 @@
 "use client"
 
+import prisma from "./db"
+import { useEffect, useState } from "react"
+import type { NextApiRequest, NextApiResponse } from "next"
+
 export interface User {
   id: string
   email: string
@@ -51,290 +55,95 @@ export interface AdminCredentials {
   twoFactorCode?: string
 }
 
-// Enhanced mock data for demonstration
-export const mockUsers: User[] = [
-  {
-    id: "1",
-    email: "john@example.com",
-    name: "John Doe",
-    balance: 2500.0,
-    accountNumber: "1234567890",
-    phone: "+1234567890",
-    isActive: true,
-    role: "user",
-    createdAt: "2024-01-01T00:00:00Z",
-    lastLogin: "2024-01-15T10:30:00Z",
-    kycStatus: "verified",
-    twoFactorEnabled: true,
-    pin: "1234",
-    address: {
-      street: "123 Main St",
-      city: "New York",
-      state: "NY",
-      zipCode: "10001",
-      country: "USA",
-    },
-    dateOfBirth: "1990-01-01",
-    ssn: "***-**-1234",
-    employmentStatus: "employed",
-    annualIncome: 75000,
-  },
-  {
-    id: "2",
-    email: "sarah@example.com",
-    name: "Sarah Johnson",
-    balance: 1800.0,
-    accountNumber: "1234567891",
-    phone: "+1234567891",
-    isActive: true,
-    role: "user",
-    createdAt: "2024-01-02T00:00:00Z",
-    lastLogin: "2024-01-14T15:45:00Z",
-    kycStatus: "verified",
-    twoFactorEnabled: false,
-    pin: "5678",
-    address: {
-      street: "456 Oak Ave",
-      city: "Los Angeles",
-      state: "CA",
-      zipCode: "90210",
-      country: "USA",
-    },
-    dateOfBirth: "1985-05-15",
-    ssn: "***-**-5678",
-    employmentStatus: "employed",
-    annualIncome: 85000,
-  },
-  {
-    id: "3",
-    email: "mike@example.com",
-    name: "Mike Wilson",
-    balance: 3200.0,
-    accountNumber: "1234567892",
-    phone: "+1234567892",
-    isActive: true,
-    role: "user",
-    createdAt: "2024-01-03T00:00:00Z",
-    lastLogin: "2024-01-13T09:20:00Z",
-    kycStatus: "verified",
-    twoFactorEnabled: true,
-    pin: "9012",
-    address: {
-      street: "789 Pine St",
-      city: "Chicago",
-      state: "IL",
-      zipCode: "60601",
-      country: "USA",
-    },
-    dateOfBirth: "1988-12-10",
-    ssn: "***-**-9012",
-    employmentStatus: "employed",
-    annualIncome: 95000,
-  },
-  {
-    id: "admin",
-    email: "admin@faspay.com",
-    name: "Admin User",
-    balance: 0,
-    accountNumber: "ADMIN001",
-    isActive: true,
-    role: "admin",
-    createdAt: "2024-01-01T00:00:00Z",
-    lastLogin: "2024-01-15T12:00:00Z",
-    kycStatus: "verified",
-    twoFactorEnabled: true,
-    pin: "0000",
-  },
-]
-
-export const mockTransactions: Transaction[] = [
-  {
-    id: "txn_001",
-    fromUserId: "1",
-    toUserId: "2",
-    amount: 500.0,
-    type: "send",
-    status: "completed",
-    description: "Payment for dinner",
-    reference: "REF001",
-    createdAt: "2024-01-15T10:30:00Z",
-    completedAt: "2024-01-15T10:30:05Z",
-    category: "food",
-    location: "New York, NY",
-  },
-  {
-    id: "txn_002",
-    fromUserId: "admin",
-    toUserId: "1",
-    amount: 1000.0,
-    type: "admin_credit",
-    status: "completed",
-    description: "Welcome bonus",
-    reference: "ADMIN001",
-    createdAt: "2024-01-14T09:00:00Z",
-    completedAt: "2024-01-14T09:00:01Z",
-    category: "bonus",
-  },
-  {
-    id: "txn_003",
-    fromUserId: "2",
-    toUserId: "3",
-    amount: 250.0,
-    type: "send",
-    status: "completed",
-    description: "Rent payment",
-    reference: "REF002",
-    createdAt: "2024-01-13T14:20:00Z",
-    completedAt: "2024-01-13T14:20:03Z",
-    category: "housing",
-    location: "Los Angeles, CA",
-  },
-]
-
-// Admin authentication
-export const adminCredentials = {
-  email: "admin@faspay.com",
-  password: "FaspayAdmin2024!",
-  twoFactorSecret: "FASPAY2024ADMIN",
-}
-
-export const authenticateAdmin = (credentials: AdminCredentials): boolean => {
-  if (credentials.email !== adminCredentials.email || credentials.password !== adminCredentials.password) {
-    return false
-  }
-
-  // In a real app, you'd verify the 2FA code here
-  if (credentials.twoFactorCode && credentials.twoFactorCode !== "123456") {
-    return false
-  }
-
-  return true
-}
-
-export const getCurrentUser = (): User | null => {
-  if (typeof window === "undefined") return null
-  const userData = localStorage.getItem("faspay_user")
-  return userData ? JSON.parse(userData) : null
-}
-
-export const getCurrentAdmin = (): User | null => {
-  if (typeof window === "undefined") return null
-  const adminData = localStorage.getItem("faspay_admin")
-  return adminData ? JSON.parse(adminData) : null
-}
-
-export const loginUser = (email: string, password: string, pin?: string): User | null => {
-  const users = getAllUsers()
-  const user = users.find((u) => u.email === email && u.role === "user")
-
-  if (!user) return null
-
-  // In a real app, you'd hash and compare passwords
-  // For demo purposes, we'll use simple validation
-  const validCredentials = email === "john@example.com" && password === "password123"
-  const validPin = pin === user.pin
-
-  if (validCredentials && validPin) {
-    const updatedUser = { ...user, lastLogin: new Date().toISOString() }
-    updateUser(updatedUser)
-    localStorage.setItem("faspay_user", JSON.stringify(updatedUser))
-    return updatedUser
-  }
-
+// Get current user from session/cookie (implement session logic as needed)
+export const getCurrentUser = async (): Promise<User | null> => {
+  // Implement session/cookie logic here
   return null
 }
 
-export const loginAdmin = (credentials: AdminCredentials): User | null => {
-  if (!authenticateAdmin(credentials)) return null
-
-  const admin = mockUsers.find((u) => u.role === "admin")
-  if (!admin) return null
-
-  const updatedAdmin = { ...admin, lastLogin: new Date().toISOString() }
-  localStorage.setItem("faspay_admin", JSON.stringify(updatedAdmin))
-  return updatedAdmin
+// Get current admin from session/cookie (implement session logic as needed)
+export const getCurrentAdmin = async (): Promise<User | null> => {
+  // Implement session/cookie logic here
+  return null
 }
 
+// Login user (replace with secure password hash check in production)
+export const loginUser = async (email: string, password: string, pin?: string): Promise<User | null> => {
+  const user = await prisma.user.findFirst({ where: { email, role: "user" } })
+  if (!user) return null
+  // TODO: Implement password hash check and pin check
+  return user
+}
+
+// Login admin (replace with secure password hash check in production)
+export const loginAdmin = async (credentials: AdminCredentials): Promise<User | null> => {
+  const admin = await prisma.user.findFirst({ where: { email: credentials.email, role: "admin" } })
+  if (!admin) return null
+  // TODO: Implement password hash check and 2FA check
+  return admin
+}
+
+// Logout logic (clear session/cookie)
 export const logoutUser = () => {
-  localStorage.removeItem("faspay_user")
+  // Implement session/cookie clearing logic
 }
 
 export const logoutAdmin = () => {
-  localStorage.removeItem("faspay_admin")
+  // Implement session/cookie clearing logic
 }
 
-export const updateUserBalance = (userId: string, newBalance: number) => {
-  const users = getAllUsers()
-  const userIndex = users.findIndex((u) => u.id === userId)
-  if (userIndex !== -1) {
-    users[userIndex].balance = newBalance
-    users[userIndex].lastLogin = new Date().toISOString()
-    localStorage.setItem("faspay_users", JSON.stringify(users))
+// Update user balance
+export const updateUserBalance = async (userId: string, newBalance: number) => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { balance: newBalance, lastLogin: new Date().toISOString() },
+  })
+}
 
-    // Update current user if it's the same user
-    const currentUser = getCurrentUser()
-    if (currentUser && currentUser.id === userId) {
-      currentUser.balance = newBalance
-      localStorage.setItem("faspay_user", JSON.stringify(currentUser))
+// Update user details
+export const updateUser = async (updatedUser: Partial<User> & { id: string }) => {
+  await prisma.user.update({
+    where: { id: updatedUser.id },
+    data: { ...updatedUser },
+  })
+}
+
+// Get all users
+export const getAllUsers = async (): Promise<User[]> => {
+  return await prisma.user.findMany()
+}
+
+// Get all transactions
+export const getAllTransactions = async (): Promise<Transaction[]> => {
+  return await prisma.transaction.findMany()
+}
+
+// Get transactions for a user
+export const getUserTransactions = async (userId: string): Promise<Transaction[]> => {
+  return await prisma.transaction.findMany({
+    where: {
+      OR: [
+        { fromUserId: userId },
+        { toUserId: userId }
+      ]
     }
-  }
+  })
 }
 
-export const updateUser = (updatedUser: User) => {
-  const users = getAllUsers()
-  const userIndex = users.findIndex((u) => u.id === updatedUser.id)
-  if (userIndex !== -1) {
-    users[userIndex] = updatedUser
-    localStorage.setItem("faspay_users", JSON.stringify(users))
-  }
+// Add a transaction
+export const addTransaction = async (transaction: Omit<Transaction, "id">) => {
+  return await prisma.transaction.create({ data: transaction })
 }
 
-export const getAllUsers = (): User[] => {
-  if (typeof window === "undefined") return mockUsers
-  const users = localStorage.getItem("faspay_users")
-  if (!users) {
-    localStorage.setItem("faspay_users", JSON.stringify(mockUsers))
-    return mockUsers
-  }
-  return JSON.parse(users)
+// Update a transaction
+export const updateTransaction = async (transactionId: string, updates: Partial<Transaction>) => {
+  return await prisma.transaction.update({
+    where: { id: transactionId },
+    data: updates,
+  })
 }
 
-export const getAllTransactions = (): Transaction[] => {
-  if (typeof window === "undefined") return mockTransactions
-  const transactions = localStorage.getItem("faspay_transactions")
-  if (!transactions) {
-    localStorage.setItem("faspay_transactions", JSON.stringify(mockTransactions))
-    return mockTransactions
-  }
-  return JSON.parse(transactions)
-}
-
-export const getUserTransactions = (userId: string): Transaction[] => {
-  const allTransactions = getAllTransactions()
-  return allTransactions.filter((t) => t.fromUserId === userId || t.toUserId === userId)
-}
-
-export const addTransaction = (transaction: Transaction) => {
-  const transactions = getAllTransactions()
-  transactions.unshift(transaction)
-  localStorage.setItem("faspay_transactions", JSON.stringify(transactions))
-
-  // Trigger real-time update event
-  window.dispatchEvent(new CustomEvent("transactionAdded", { detail: transaction }))
-}
-
-export const updateTransaction = (transactionId: string, updates: Partial<Transaction>) => {
-  const transactions = getAllTransactions()
-  const index = transactions.findIndex((t) => t.id === transactionId)
-  if (index !== -1) {
-    transactions[index] = { ...transactions[index], ...updates }
-    localStorage.setItem("faspay_transactions", JSON.stringify(transactions))
-
-    // Trigger real-time update event
-    window.dispatchEvent(new CustomEvent("transactionUpdated", { detail: transactions[index] }))
-  }
-}
-
+// Generate IDs and references
 export const generateTransactionId = () => {
   return `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
@@ -356,9 +165,8 @@ export const processTransaction = async (
   type: Transaction["type"] = "send",
 ): Promise<{ success: boolean; transaction?: Transaction; error?: string }> => {
   try {
-    const users = getAllUsers()
-    const fromUser = users.find((u) => u.id === fromUserId)
-    const toUser = users.find((u) => u.id === toUserId)
+    const fromUser = await prisma.user.findUnique({ where: { id: fromUserId } })
+    const toUser = await prisma.user.findUnique({ where: { id: toUserId } })
 
     if (!fromUser || !toUser) {
       return { success: false, error: "User not found" }
@@ -373,45 +181,41 @@ export const processTransaction = async (
     }
 
     // Create pending transaction
-    const transaction: Transaction = {
-      id: generateTransactionId(),
-      fromUserId,
-      toUserId,
-      amount,
-      type,
-      status: "pending",
-      description,
-      reference: generateReference(),
-      createdAt: new Date().toISOString(),
-      metadata: {
-        fromUserName: fromUser.name,
-        toUserName: toUser.name,
-        processingTime: Date.now(),
-      },
-    }
-
-    addTransaction(transaction)
+    const transaction = await prisma.transaction.create({
+      data: {
+        id: generateTransactionId(),
+        fromUserId,
+        toUserId,
+        amount,
+        type,
+        status: "pending",
+        description,
+        reference: generateReference(),
+        createdAt: new Date().toISOString(),
+        metadata: {
+          fromUserName: fromUser.name,
+          toUserName: toUser.name,
+          processingTime: Date.now(),
+        },
+      }
+    })
 
     // Simulate processing delay (1-3 seconds)
-    const processingTime = Math.random() * 2000 + 1000
-    await new Promise((resolve) => setTimeout(resolve, processingTime))
+    await new Promise((resolve) => setTimeout(resolve, Math.random() * 2000 + 1000))
 
     // Process the transaction
     if (fromUser.role !== "admin") {
-      updateUserBalance(fromUserId, fromUser.balance - amount)
+      await updateUserBalance(fromUserId, fromUser.balance - amount)
     }
-    updateUserBalance(toUserId, toUser.balance + amount)
+    await updateUserBalance(toUserId, toUser.balance + amount)
 
     // Update transaction status
-    const completedTransaction = {
-      ...transaction,
-      status: "completed" as const,
-      completedAt: new Date().toISOString(),
-    }
-
-    updateTransaction(transaction.id, {
-      status: "completed",
-      completedAt: new Date().toISOString(),
+    const completedTransaction = await prisma.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+      }
     })
 
     return { success: true, transaction: completedTransaction }
@@ -422,8 +226,8 @@ export const processTransaction = async (
 }
 
 // Fraud detection (basic implementation)
-export const detectFraud = (transaction: Transaction, user: User): boolean => {
-  const userTransactions = getUserTransactions(user.id)
+export const detectFraud = async (transaction: Transaction, user: User): Promise<boolean> => {
+  const userTransactions = await getUserTransactions(user.id)
   const recentTransactions = userTransactions.filter(
     (t) => new Date(t.createdAt).getTime() > Date.now() - 24 * 60 * 60 * 1000,
   )
@@ -441,23 +245,23 @@ export const detectFraud = (transaction: Transaction, user: User): boolean => {
 }
 
 // Account verification
-export const verifyAccount = (userId: string, verificationType: "email" | "phone" | "identity"): boolean => {
-  const users = getAllUsers()
-  const user = users.find((u) => u.id === userId)
+export const verifyAccount = async (userId: string, verificationType: "email" | "phone" | "identity"): Promise<boolean> => {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return false
 
-  // Simulate verification process
-  const updatedUser = { ...user, kycStatus: "verified" as const }
-  updateUser(updatedUser)
+  await prisma.user.update({
+    where: { id: userId },
+    data: { kycStatus: "verified" }
+  })
   return true
 }
 
 // Generate account statement
-export const generateAccountStatement = (
+export const generateAccountStatement = async (
   userId: string,
   startDate: string,
   endDate: string,
-): {
+): Promise<{
   user: User
   transactions: Transaction[]
   summary: {
@@ -467,11 +271,21 @@ export const generateAccountStatement = (
     totalDebits: number
     transactionCount: number
   }
-} => {
-  const user = getAllUsers().find((u) => u.id === userId)!
-  const transactions = getUserTransactions(userId).filter((t) => {
-    const transactionDate = new Date(t.createdAt)
-    return transactionDate >= new Date(startDate) && transactionDate <= new Date(endDate)
+}> => {
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user) throw new Error("User not found")
+
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      OR: [
+        { fromUserId: userId },
+        { toUserId: userId }
+      ],
+      createdAt: {
+        gte: startDate,
+        lte: endDate
+      }
+    }
   })
 
   const totalCredits = transactions
@@ -495,17 +309,98 @@ export const generateAccountStatement = (
   }
 }
 
-import { useEffect, useState } from "react"
-
+// React hook for auth (example, should use context/session in production)
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const userData = typeof window !== "undefined" ? localStorage.getItem("faspay_user") : null
-    setUser(userData ? JSON.parse(userData) : null)
+    // Fetch current user from API/session
     setLoading(false)
   }, [])
 
   return { user, loading }
+}
+
+// Create a new user account (admin only)
+export const createUserAccount = async (userData: Omit<User, "id" | "createdAt" | "role" | "balance">) => {
+  return await prisma.user.create({
+    data: {
+      ...userData,
+      id: generateAccountNumber(),
+      createdAt: new Date().toISOString(),
+      role: "user",
+      balance: 0,
+      isActive: true,
+      kycStatus: "pending",
+      twoFactorEnabled: false,
+    }
+  })
+}
+
+// Admin funds a user's account
+export const adminFundAccount = async (
+  toUserId: string,
+  amount: number,
+  senderName: string = "Faspay Admin",
+  description: string = "Account funding"
+) => {
+  const toUser = await prisma.user.findUnique({ where: { id: toUserId } })
+  if (!toUser) return { success: false, error: "User not found" }
+
+  await updateUserBalance(toUserId, toUser.balance + amount)
+
+  // Record transaction
+  const transaction = await prisma.transaction.create({
+    data: {
+      id: generateTransactionId(),
+      fromUserId: "admin",
+      toUserId,
+      amount,
+      type: "admin_credit",
+      status: "completed",
+      description: `${description} (Sender: ${senderName})`,
+      reference: generateReference(),
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      metadata: { senderName },
+    }
+  })
+  return { success: true, transaction }
+}
+
+// Admin withdraws money from a user's account
+export const adminWithdrawFromAccount = async (
+  fromUserId: string,
+  amount: number,
+  description: string = "Admin withdrawal"
+) => {
+  const fromUser = await prisma.user.findUnique({ where: { id: fromUserId } })
+  if (!fromUser) return { success: false, error: "User not found" }
+  if (fromUser.balance < amount) return { success: false, error: "Insufficient funds" }
+
+  await updateUserBalance(fromUserId, fromUser.balance - amount)
+
+  // Record transaction
+  const transaction = await prisma.transaction.create({
+    data: {
+      id: generateTransactionId(),
+      fromUserId,
+      toUserId: "admin",
+      amount,
+      type: "admin_debit",
+      status: "completed",
+      description,
+      reference: generateReference(),
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      metadata: {},
+    }
+  })
+  return { success: true, transaction }
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const users = await prisma.user.findMany()
+  res.status(200).json(users)
 }

@@ -29,12 +29,17 @@ export default function AdminTransactions() {
   const [filterType, setFilterType] = useState<"all" | "send" | "receive" | "admin_credit">("all")
 
   useEffect(() => {
-    const allUsers = getAllUsers()
-    const allTransactions = getAllTransactions()
+    async function fetchData() {
+      const usersRes = await fetch("/api/users")
+      const users = await usersRes.json()
+      setUsers(users)
 
-    setUsers(allUsers)
-    setTransactions(allTransactions)
-    setFilteredTransactions(allTransactions)
+      const txRes = await fetch("/api/transactions")
+      const transactions = await txRes.json()
+      setTransactions(transactions)
+      setFilteredTransactions(transactions)
+    }
+    fetchData()
   }, [])
 
   useEffect(() => {

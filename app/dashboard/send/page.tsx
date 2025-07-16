@@ -20,6 +20,7 @@ import Link from "next/link"
 export default function SendMoneyPage() {
   const [user, setUser] = useState<UserType | null>(null)
   const [allUsers, setAllUsers] = useState<UserType[]>([])
+  const [recentBeneficiaries, setRecentBeneficiaries] = useState<UserType[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [alert, setAlert] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null)
   const [formData, setFormData] = useState({
@@ -28,20 +29,46 @@ export default function SendMoneyPage() {
     note: "",
   })
   const [recipientUser, setRecipientUser] = useState<UserType | null>(null)
-  const [step, setStep] = useState<"form" | "confirm" | "processing" | "success">("form")
+  const [step, setStep] = useState<"form" | "confirm" | "processing" | "success" | "pin">("form")
+  const [pinInput, setPinInput] = useState("")
+  const [pinError, setPinError] = useState("")
   const router = useRouter()
   const { sendTransactionNotification } = useNotifications()
 
   useEffect(() => {
-    const userData = getCurrentUser()
-    if (!userData) {
-      router.push("/auth/login")
-      return
-    }
-    setUser(userData)
+    async function fetchData() {
+      // Get current user from API
+      const userRes = await fetch("/api/current-user")
+      if (!userRes.ok) {
+        router.push("/auth/login")
+        return
+      }
+      const userData = await userRes.json()
+      setUser(userData)
 
-    const users = getAllUsers().filter((u) => u.role === "user" && u.id !== userData.id)
-    setAllUsers(users)
+      // Get all users from API
+      const usersRes = await fetch("/api/users")
+      const users = await usersRes.json()
+      setAllUsers(users.filter((u: UserType) => u.role === "user" && u.id !== userData.id))
+
+      // Fetch transactions where user is sender
+      const txRes = await fetch("/api/transactions")
+      const txs = await txRes.json()
+      const sentTxs = txs.filter((t: any) => t.fromUserId === userData.id)
+
+      // Get unique recipient IDs, most recent first
+      const uniqueRecipientIds: string[] = []
+      sentTxs.forEach((t: any) => {
+        if (!uniqueRecipientIds.includes(t.toUserId)) {
+          uniqueRecipientIds.push(t.toUserId)
+        }
+      })
+
+      // Map to user objects
+      const beneficiaries = users.filter((u: UserType) => uniqueRecipientIds.includes(u.id))
+      setRecentBeneficiaries(beneficiaries)
+    }
+    fetchData()
   }, [router])
 
   useEffect(() => {
@@ -74,6 +101,31 @@ export default function SendMoneyPage() {
   }
 
   const handleConfirm = async () => {
+    setStep("pin")
+  }
+
+  const handlePinAndSend = async () => {
+    setPinError("")
+    if (!/^\d{4}$/.test(pinInput)) {
+      setPinError("PIN must be exactly 4 digits.")
+      return
+    }
+    // Verify PIN via API
+    const res = await fetch("/api/verify-pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: pinInput }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      setPinError(data.error || "PIN verification failed")
+      return
+    }
+    // If PIN is correct, proceed with transaction as before
+    await handleSendTransaction()
+  }
+
+  const handleSendTransaction = async () => {
     if (!user || !recipientUser) return
 
     setStep("processing")
@@ -82,25 +134,24 @@ export default function SendMoneyPage() {
 
     try {
       const amount = Number.parseFloat(formData.amount)
-      const result = await processTransaction(
-        user.id,
-        recipientUser.id,
-        amount,
-        formData.note || `Payment to ${recipientUser.name}`,
-        "send",
-      )
+      const res = await fetch("/api/transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromUserId: user.id,
+          toUserId: recipientUser.id,
+          amount,
+          description: formData.note || `Payment to ${recipientUser.name}`,
+          type: "send",
+        }),
+      })
+      const result = await res.json()
 
       if (result.success) {
-        // Send notifications
         sendTransactionNotification("sent", amount, recipientUser.name, result.transaction!.id)
-
-        // Update user balance in state
         setUser((prev) => (prev ? { ...prev, balance: prev.balance - amount } : null))
-
         setStep("success")
         setAlert({ type: "success", message: "Money sent successfully!" })
-
-        // Auto redirect after 3 seconds
         setTimeout(() => {
           router.push("/dashboard")
         }, 3000)
@@ -309,6 +360,31 @@ export default function SendMoneyPage() {
           </Card>
         )}
 
+        {step === "pin" && (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <h3 className="text-lg font-semibold mb-2">Enter PIN to Confirm</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                For your security, please enter your 4-digit PIN to confirm the transaction.
+              </p>
+              <div className="flex flex-col items-center space-y-4">
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Enter 4-digit PIN"
+                  className="border rounded px-2 py-1 w-24 text-center"
+                />
+                <Button onClick={handlePinAndSend} className="w-full bg-primary hover:bg-primary/90 text-black">
+                  Confirm Transaction
+                </Button>
+                {pinError && <div className="text-red-600 text-sm mt-2">{pinError}</div>}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {step === "processing" && (
           <Card>
             <CardContent className="p-8 text-center">
@@ -346,29 +422,33 @@ export default function SendMoneyPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Quick Send</CardTitle>
-              <CardDescription>Send to recent contacts</CardDescription>
+              <CardDescription>Send to recent beneficiaries</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                {allUsers.slice(0, 6).map((contact) => (
-                  <button
-                    key={contact.id}
-                    type="button"
-                    className="flex flex-col items-center space-y-2 p-3 rounded-lg hover:bg-muted/50 transition-colors"
-                    onClick={() => setFormData((prev) => ({ ...prev, recipient: contact.email }))}
-                  >
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-primary/20 text-primary text-sm">
-                        {contact.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-xs font-medium text-center">{contact.name.split(" ")[0]}</span>
-                  </button>
-                ))}
-              </div>
+              {recentBeneficiaries.length === 0 ? (
+                <div className="text-muted-foreground text-sm text-center">No recent beneficiaries.</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {recentBeneficiaries.slice(0, 6).map((contact) => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      className="flex flex-col items-center space-y-2 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                      onClick={() => setFormData((prev) => ({ ...prev, recipient: contact.email }))}
+                    >
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                          {contact.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs font-medium text-center">{contact.name.split(" ")[0]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

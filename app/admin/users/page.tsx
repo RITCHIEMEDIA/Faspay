@@ -18,9 +18,14 @@ export default function AdminUsers() {
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all")
 
   useEffect(() => {
-    const allUsers = getAllUsers().filter((u) => u.role === "user")
-    setUsers(allUsers)
-    setFilteredUsers(allUsers)
+    async function fetchUsers() {
+      const res = await fetch("/api/users")
+      const allUsers = await res.json()
+      const usersOnly = allUsers.filter((u: User) => u.role === "user")
+      setUsers(usersOnly)
+      setFilteredUsers(usersOnly)
+    }
+    fetchUsers()
   }, [])
 
   useEffect(() => {

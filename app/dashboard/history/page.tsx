@@ -22,26 +22,31 @@ export default function TransactionHistoryPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const userData = localStorage.getItem("faspay_user")
-    if (!userData) {
-      router.push("/auth/login")
-      return
+    async function fetchData() {
+      // Get current user from API
+      const userRes = await fetch("/api/current-user")
+      if (!userRes.ok) {
+        router.push("/auth/login")
+        return
+      }
+      const currentUser = await userRes.json()
+      setUser(currentUser)
+
+      // Get all users from API
+      const usersRes = await fetch("/api/users")
+      const users = await usersRes.json()
+      setAllUsers(users)
+
+      // Get all transactions from API and filter for current user
+      const transactionsRes = await fetch("/api/transactions")
+      const allTransactions = await transactionsRes.json()
+      const userTransactions = allTransactions.filter(
+        (t: any) => t.fromUserId === currentUser.id || t.toUserId === currentUser.id,
+      )
+      setTransactions(userTransactions)
+      setFilteredTransactions(userTransactions)
     }
-
-    const currentUser = JSON.parse(userData)
-    setUser(currentUser)
-
-    const users = getAllUsers()
-    setAllUsers(users)
-
-    // Get transactions for current user
-    const allTransactions = getAllTransactions()
-    const userTransactions = allTransactions.filter(
-      (t) => t.fromUserId === currentUser.id || t.toUserId === currentUser.id,
-    )
-
-    setTransactions(userTransactions)
-    setFilteredTransactions(userTransactions)
+    fetchData()
   }, [router])
 
   useEffect(() => {
@@ -249,13 +254,21 @@ export default function TransactionHistoryPage() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">
                             {transaction.type === "admin_credit"
-                              ? "Admin Credit"
+                              ? transaction.metadata?.senderName
+                                ? `From ${transaction.metadata.senderName}`
+                                : "Admin Credit"
                               : isOutgoing
                                 ? `To ${otherUser?.name || "Unknown"}`
                                 : `From ${otherUser?.name || "Unknown"}`}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">{transaction.description}</p>
                           <p className="text-xs text-muted-foreground">{formatDate(transaction.createdAt)}</p>
+                          {transaction.type === "admin_credit" && transaction.metadata?.senderEmail && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {transaction.metadata.senderEmail}
+                              {transaction.metadata.senderPhone ? ` • ${transaction.metadata.senderPhone}` : ""}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">

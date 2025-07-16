@@ -12,8 +12,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getCurrentAdmin, getAllUsers, processTransaction } from "@/lib/auth"
 import { useNotifications } from "@/hooks/use-notifications"
+import PinInput from "@/components/ui/PinInput"
+import BiometricButton from "@/components/ui/BiometricButton"
 
 export default function AdminSendMoneyPage() {
   const [admin, setAdmin] = useState(null)
@@ -27,24 +28,37 @@ export default function AdminSendMoneyPage() {
     type: "admin_credit",
     reason: "",
     note: "",
+    senderName: "",
+    senderEmail: "",
+    senderPhone: "",
   })
   const [selectedUser, setSelectedUser] = useState(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [step, setStep] = useState("form")
+  const [pinVerified, setPinVerified] = useState(false)
+  const [showPinModal, setShowPinModal] = useState(false)
   const router = useRouter()
   const { sendTransactionNotification } = useNotifications()
 
   useEffect(() => {
-    const adminData = getCurrentAdmin()
-    if (!adminData) {
-      router.push("/admin/auth")
-      return
-    }
-    setAdmin(adminData)
+    async function fetchData() {
+      // Get current admin from API
+      const adminRes = await fetch("/api/current-admin")
+      if (!adminRes.ok) {
+        router.push("/admin/auth")
+        return
+      }
+      const adminData = await adminRes.json()
+      setAdmin(adminData)
 
-    const allUsers = getAllUsers().filter((u) => u.role === "user")
-    setUsers(allUsers)
-    setFilteredUsers(allUsers)
+      // Get all users from API
+      const usersRes = await fetch("/api/users")
+      const users = await usersRes.json()
+      const userList = users.filter((u) => u.role === "user")
+      setUsers(userList)
+      setFilteredUsers(userList)
+    }
+    fetchData()
   }, [router])
 
   useEffect(() => {
@@ -85,6 +99,11 @@ export default function AdminSendMoneyPage() {
       return
     }
 
+    if (!formData.senderName || !formData.senderEmail) {
+      setAlert({ type: "error", message: "Sender name and email are required" })
+      return
+    }
+
     setStep("confirm")
   }
 
@@ -99,20 +118,29 @@ export default function AdminSendMoneyPage() {
       const amount = Number.parseFloat(formData.amount)
       const isCredit = formData.type === "admin_credit"
 
-      const result = await processTransaction(
-        isCredit ? admin.id : selectedUser.id,
-        isCredit ? selectedUser.id : admin.id,
-        amount,
-        `${formData.reason} - ${formData.note}`.trim(),
-        formData.type,
-      )
+      // --- Use API route instead of direct processTransaction call ---
+      const res = await fetch("/api/admin-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromUserId: isCredit ? admin.id : selectedUser.id,
+          toUserId: isCredit ? selectedUser.id : admin.id,
+          amount,
+          description: `${formData.reason} - ${formData.note}`.trim(),
+          type: formData.type,
+          senderName: formData.senderName,
+          senderEmail: formData.senderEmail,
+          senderPhone: formData.senderPhone,
+        }),
+      })
+      const result = await res.json()
 
       if (result.success) {
         // Send notification to user
         sendTransactionNotification(
           isCredit ? "received" : "sent",
           amount,
-          isCredit ? "Faspay Admin" : "Admin Debit",
+          formData.senderName || (isCredit ? "Faspay Admin" : "Admin Debit"),
           result.transaction!.id,
         )
 
@@ -141,6 +169,29 @@ export default function AdminSendMoneyPage() {
     }
   }
 
+  const handlePinCheck = async (pin: string) => {
+    // Verify PIN via API
+    const res = await fetch("/api/admin/verify-pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin }),
+    })
+    const result = await res.json()
+    if (result.success) {
+      setPinVerified(true)
+      setShowPinModal(false)
+      handleConfirm() // Proceed with transaction
+    } else {
+      alert("Incorrect PIN")
+    }
+  }
+
+  const handleBiometricSuccess = () => {
+    setPinVerified(true)
+    setShowPinModal(false)
+    handleConfirm()
+  }
+
   const resetForm = () => {
     setFormData({
       recipientId: "",
@@ -148,6 +199,9 @@ export default function AdminSendMoneyPage() {
       type: "admin_credit",
       reason: "",
       note: "",
+      senderName: "",
+      senderEmail: "",
+      senderPhone: "",
     })
     setSelectedUser(null)
     setSearchQuery("")
@@ -196,6 +250,38 @@ export default function AdminSendMoneyPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* SENDER DETAILS */}
+                <div className="space-y-2">
+                  <Label htmlFor="senderName">Sender Name</Label>
+                  <Input
+                    id="senderName"
+                    placeholder="Sender's Name"
+                    value={formData.senderName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, senderName: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="senderEmail">Sender Email</Label>
+                  <Input
+                    id="senderEmail"
+                    placeholder="Sender's Email"
+                    value={formData.senderEmail}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, senderEmail: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="senderPhone">Sender Phone (optional)</Label>
+                  <Input
+                    id="senderPhone"
+                    placeholder="Sender's Phone"
+                    value={formData.senderPhone}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, senderPhone: e.target.value }))}
+                  />
+                </div>
+                {/* END SENDER DETAILS */}
+
                 <div className="space-y-2">
                   <Label htmlFor="type">Transaction Type</Label>
                   <Select
@@ -279,7 +365,7 @@ export default function AdminSendMoneyPage() {
                     onValueChange={(value) => setFormData((prev) => ({ ...prev, reason: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select reason" />
+                      <SelectValue placeholder="Select reason (optional)" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Welcome Bonus">Welcome Bonus</SelectItem>
@@ -308,9 +394,10 @@ export default function AdminSendMoneyPage() {
                 </div>
 
                 <Button
-                  type="submit"
+                  type="button"
                   className="w-full bg-primary hover:bg-primary/90 text-black"
-                  disabled={!selectedUser || !formData.amount || !formData.reason || isLoading}
+                  onClick={() => setShowPinModal(true)}
+                  disabled={!selectedUser || !formData.amount || isLoading}
                 >
                   Continue
                 </Button>
@@ -489,6 +576,19 @@ export default function AdminSendMoneyPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {showPinModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-background p-6 rounded-lg shadow-lg w-full max-w-xs">
+            <h3 className="text-lg font-semibold mb-2 text-center">Authenticate Transaction</h3>
+            <PinInput onSubmit={handlePinCheck} />
+            <BiometricButton onSuccess={handleBiometricSuccess} />
+            <button className="mt-4 w-full btn btn-outline" onClick={() => setShowPinModal(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

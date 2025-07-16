@@ -9,28 +9,64 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { NotificationSettingsCard } from "@/components/notifications/notification-settings"
-import { getCurrentUser, logoutUser } from "@/lib/auth"
 import Link from "next/link"
 
 export default function SettingsPage() {
   const [user, setUser] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [pin, setPin] = useState("")
+  const [pinStatus, setPinStatus] = useState<null | "success" | "error">(null)
+  const [pinMessage, setPinMessage] = useState("")
   const router = useRouter()
 
   useEffect(() => {
-    const userData = getCurrentUser()
-    if (!userData) {
-      router.push("/auth/login")
-      return
+    async function fetchUser() {
+      setIsLoading(true)
+      const res = await fetch("/api/current-user")
+      if (!res.ok) {
+        router.push("/auth/login")
+        return
+      }
+      const userData = await res.json()
+      setUser(userData)
+      setIsLoading(false)
     }
-    setUser(userData)
+    fetchUser()
   }, [router])
 
-  const handleLogout = () => {
-    logoutUser()
+  const handleLogout = async () => {
+    await fetch("/api/logout", { method: "POST" })
     router.push("/")
   }
 
-  if (!user) {
+  // Set or change PIN
+  const handleSetPin = async () => {
+    setPinStatus(null)
+    setPinMessage("")
+    if (!/^\d{4}$/.test(pin)) {
+      setPinStatus("error")
+      setPinMessage("PIN must be exactly 4 digits.")
+      return
+    }
+    const res = await fetch("/api/set-pin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin }),
+    })
+    if (res.ok) {
+      setPinStatus("success")
+      setPinMessage("PIN set successfully!")
+      setPin("")
+      // Optionally, refresh user data
+      const userRes = await fetch("/api/current-user")
+      setUser(await userRes.json())
+    } else {
+      setPinStatus("error")
+      setPinMessage("Failed to set PIN.")
+    }
+  }
+
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -61,10 +97,12 @@ export default function SettingsPage() {
             <div className="flex items-center space-x-4">
               <Avatar className="h-16 w-16">
                 <AvatarFallback className="bg-primary/20 text-primary text-lg font-semibold">
-                  {user.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
+                  {user?.name
+                    ? user.name
+                        .split(" ")
+                        .map((n: string) => n[0])
+                        .join("")
+                    : ""}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
@@ -156,12 +194,27 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium">Login PIN</h4>
-                      <p className="text-sm text-muted-foreground">Quick access PIN for mobile app</p>
+                      <p className="text-sm text-muted-foreground">Quick access PIN for mobile app and transaction confirmation</p>
                     </div>
-                    <Button variant="outline" size="sm">
-                      Change PIN
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="password"
+                        maxLength={4}
+                        value={pin}
+                        onChange={e => setPin(e.target.value.replace(/\D/g, ""))}
+                        placeholder="Set 4-digit PIN"
+                        className="border rounded px-2 py-1 w-24 text-center"
+                      />
+                      <Button variant="outline" size="sm" onClick={handleSetPin}>
+                        {user.pin ? "Change PIN" : "Set PIN"}
+                      </Button>
+                    </div>
                   </div>
+                  {pinStatus && (
+                    <div className={`text-sm ${pinStatus === "success" ? "text-green-600" : "text-red-600"}`}>
+                      {pinMessage}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium">Password</h4>

@@ -5,11 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { BarChart3, TrendingUp, Users, DollarSign, Activity, Download, RefreshCw } from "lucide-react"
-import { getAllUsers, getAllTransactions, type User, type Transaction } from "@/lib/auth"
 
 export default function AdminAnalytics() {
-  const [users, setUsers] = useState<User[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [users, setUsers] = useState([])
+  const [transactions, setTransactions] = useState([])
   const [analytics, setAnalytics] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -19,83 +18,81 @@ export default function AdminAnalytics() {
     avgTransactionSize: 0,
     transactionCount: 0,
     successRate: 0,
-    topUsers: [] as { user: User; volume: number }[],
-    dailyStats: [] as { date: string; transactions: number; volume: number }[],
+    topUsers: [],
+    dailyStats: [],
   })
 
   useEffect(() => {
-    const allUsers = getAllUsers().filter((u) => u.role === "user")
-    const allTransactions = getAllTransactions()
+    async function fetchData() {
+      const usersRes = await fetch("/api/users")
+      const transactionsRes = await fetch("/api/transactions")
+      const allUsers = await usersRes.json()
+      const allTransactions = await transactionsRes.json()
 
-    setUsers(allUsers)
-    setTransactions(allTransactions)
+      setUsers(allUsers)
+      setTransactions(allTransactions)
 
-    // Calculate analytics
-    const now = new Date()
-    const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      // Calculate analytics
+      const now = new Date()
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const userList = allUsers.filter((u) => u.role === "user")
+      const newUsersThisMonth = userList.filter((u) => new Date(u.createdAt) >= thisMonth).length
 
-    const newUsersThisMonth = allUsers.filter((u) => new Date(u.createdAt) >= thisMonth).length
+      const completedTransactions = allTransactions.filter((t) => t.status === "completed")
+      const totalVolume = completedTransactions.reduce((sum, t) => sum + t.amount, 0)
+      const monthlyTransactions = completedTransactions.filter((t) => new Date(t.createdAt) >= thisMonth)
+      const monthlyVolume = monthlyTransactions.reduce((sum, t) => sum + t.amount, 0)
+      const avgTransactionSize = completedTransactions.length > 0 ? totalVolume / completedTransactions.length : 0
+      const successRate = allTransactions.length > 0 ? (completedTransactions.length / allTransactions.length) * 100 : 100
 
-    const completedTransactions = allTransactions.filter((t) => t.status === "completed")
-    const totalVolume = completedTransactions.reduce((sum, t) => sum + t.amount, 0)
+      // Top users by volume
+      const userVolumes = new Map()
+      completedTransactions.forEach((t) => {
+        if (t.toUserId !== "admin") {
+          userVolumes.set(t.toUserId, (userVolumes.get(t.toUserId) || 0) + t.amount)
+        }
+        if (t.fromUserId !== "admin") {
+          userVolumes.set(t.fromUserId, (userVolumes.get(t.fromUserId) || 0) + t.amount)
+        }
+      })
+      const topUsers = Array.from(userVolumes.entries())
+        .map(([userId, volume]) => ({
+          user: userList.find((u) => u.id === userId),
+          volume,
+        }))
+        .filter((item) => item.user)
+        .sort((a, b) => b.volume - a.volume)
+        .slice(0, 5)
 
-    const monthlyTransactions = completedTransactions.filter((t) => new Date(t.createdAt) >= thisMonth)
-    const monthlyVolume = monthlyTransactions.reduce((sum, t) => sum + t.amount, 0)
-
-    const avgTransactionSize = completedTransactions.length > 0 ? totalVolume / completedTransactions.length : 0
-
-    const successRate = allTransactions.length > 0 ? (completedTransactions.length / allTransactions.length) * 100 : 100
-
-    // Calculate top users by transaction volume
-    const userVolumes = new Map<string, number>()
-    completedTransactions.forEach((t) => {
-      if (t.toUserId !== "admin") {
-        userVolumes.set(t.toUserId, (userVolumes.get(t.toUserId) || 0) + t.amount)
+      // Daily stats for last 7 days
+      const dailyStats = []
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date()
+        date.setDate(date.getDate() - i)
+        const dateStr = date.toISOString().split("T")[0]
+        const dayTransactions = allTransactions.filter((t) => t.createdAt.split("T")[0] === dateStr)
+        const dayVolume = dayTransactions.filter((t) => t.status === "completed").reduce((sum, t) => sum + t.amount, 0)
+        dailyStats.push({
+          date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          transactions: dayTransactions.length,
+          volume: dayVolume,
+        })
       }
-      if (t.fromUserId !== "admin") {
-        userVolumes.set(t.fromUserId, (userVolumes.get(t.fromUserId) || 0) + t.amount)
-      }
-    })
 
-    const topUsers = Array.from(userVolumes.entries())
-      .map(([userId, volume]) => ({
-        user: allUsers.find((u) => u.id === userId)!,
-        volume,
-      }))
-      .filter((item) => item.user)
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 5)
-
-    // Calculate daily stats for the last 7 days
-    const dailyStats = []
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      const dateStr = date.toISOString().split("T")[0]
-
-      const dayTransactions = allTransactions.filter((t) => t.createdAt.split("T")[0] === dateStr)
-
-      const dayVolume = dayTransactions.filter((t) => t.status === "completed").reduce((sum, t) => sum + t.amount, 0)
-
-      dailyStats.push({
-        date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        transactions: dayTransactions.length,
-        volume: dayVolume,
+      setAnalytics({
+        totalUsers: userList.length,
+        activeUsers: userList.filter((u) => u.isActive).length,
+        newUsersThisMonth,
+        totalVolume,
+        monthlyVolume,
+        avgTransactionSize,
+        transactionCount: allTransactions.length,
+        successRate,
+        topUsers,
+        dailyStats,
       })
     }
-
-    setAnalytics({
-      totalUsers: allUsers.length,
-      activeUsers: allUsers.filter((u) => u.isActive).length,
-      newUsersThisMonth,
-      totalVolume,
-      monthlyVolume,
-      avgTransactionSize,
-      transactionCount: allTransactions.length,
-      successRate,
-      topUsers,
-      dailyStats,
-    })
+    fetchData()
   }, [])
 
   const formatCurrency = (amount: number) => {

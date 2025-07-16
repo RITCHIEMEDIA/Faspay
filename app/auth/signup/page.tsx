@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -22,6 +20,7 @@ export default function SignUpPage() {
     firstName: "",
     lastName: "",
     email: "",
+    phone: "",
     password: "",
     confirmPassword: "",
   })
@@ -37,25 +36,19 @@ export default function SignUpPage() {
       alert("Please agree to the terms and conditions")
       return
     }
-
     setIsLoading(true)
-
-    // Simulate account creation
-    setTimeout(() => {
-      // Store user session
-      localStorage.setItem(
-        "faspay_user",
-        JSON.stringify({
-          id: "1",
-          email: formData.email,
-          name: `${formData.firstName} ${formData.lastName}`,
-          balance: 0.0,
-        }),
-      )
-
-      setIsLoading(false)
-      router.push("/dashboard")
-    }, 2000)
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    })
+    const data = await res.json()
+    setIsLoading(false)
+    if (res.ok) {
+      router.push("/auth/login")
+    } else {
+      alert(data.error || "Registration failed")
+    }
   }
 
   return (
@@ -118,6 +111,18 @@ export default function SignUpPage() {
                   placeholder="john@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="08012345678"
+                  value={formData.phone}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
                   required
                 />
               </div>

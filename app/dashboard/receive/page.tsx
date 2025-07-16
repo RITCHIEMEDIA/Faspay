@@ -17,21 +17,44 @@ interface User {
   balance: number
 }
 
+interface PaymentRequest {
+  id: string
+  amount: number
+  from: string
+  status: string
+  date: string
+}
+
 export default function ReceiveMoneyPage() {
   const [user, setUser] = useState<User | null>(null)
   const [requestAmount, setRequestAmount] = useState("")
   const [requestNote, setRequestNote] = useState("")
   const [showQR, setShowQR] = useState(false)
+  const [recentRequests, setRecentRequests] = useState<PaymentRequest[]>([])
   const router = useRouter()
 
   useEffect(() => {
-    const userData = localStorage.getItem("faspay_user")
-    if (!userData) {
-      router.push("/auth/login")
-      return
+    async function fetchUser() {
+      const userRes = await fetch("/api/current-user")
+      if (!userRes.ok) {
+        router.push("/auth/login")
+        return
+      }
+      setUser(await userRes.json())
     }
-    setUser(JSON.parse(userData))
+    fetchUser()
   }, [router])
+
+  useEffect(() => {
+    async function fetchRequests() {
+      if (!user) return
+      const res = await fetch("/api/requests")
+      if (res.ok) {
+        setRecentRequests(await res.json())
+      }
+    }
+    fetchRequests()
+  }, [user])
 
   const handleCopyLink = () => {
     const paymentLink = `https://faspay.com/pay/${user?.id}?amount=${requestAmount}&note=${encodeURIComponent(requestNote)}`
@@ -41,7 +64,6 @@ export default function ReceiveMoneyPage() {
 
   const handleShare = async () => {
     const paymentLink = `https://faspay.com/pay/${user?.id}?amount=${requestAmount}&note=${encodeURIComponent(requestNote)}`
-
     if (navigator.share) {
       try {
         await navigator.share({
@@ -205,34 +227,34 @@ export default function ReceiveMoneyPage() {
             <CardTitle className="text-lg">Recent Requests</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {[
-              { amount: "$50.00", from: "Sarah Johnson", status: "Pending", date: "2 hours ago" },
-              { amount: "$25.00", from: "Mike Wilson", status: "Paid", date: "1 day ago" },
-              { amount: "$100.00", from: "Emma Davis", status: "Pending", date: "2 days ago" },
-            ].map((request, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors"
-              >
-                <div>
-                  <p className="font-medium text-sm">
-                    {request.amount} from {request.from}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{request.date}</p>
+            {recentRequests.length === 0 ? (
+              <div className="text-muted-foreground text-sm">No recent requests.</div>
+            ) : (
+              recentRequests.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors"
+                >
+                  <div>
+                    <p className="font-medium text-sm">
+                      ${request.amount.toFixed(2)} from {request.from}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{request.date}</p>
+                  </div>
+                  <div className="text-right">
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full ${
+                        request.status === "Paid"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                          : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
+                      }`}
+                    >
+                      {request.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      request.status === "Paid"
-                        ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                        : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
-                    }`}
-                  >
-                    {request.status}
-                  </span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       </div>

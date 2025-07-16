@@ -22,53 +22,79 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { NotificationCenter } from "@/components/notifications/notification-center"
 import { ToastContainer } from "@/components/notifications/notification-toast"
-import { getCurrentUser, getUserTransactions, getAllUsers, type Transaction } from "@/lib/auth"
 import { useNotifications } from "@/hooks/use-notifications"
 import Link from "next/link"
 
+// --- Add these types ---
+type User = {
+  id: string
+  name: string
+  email: string
+  accountNumber: string
+  balance: number
+  kycStatus: string
+  twoFactorEnabled: boolean
+}
+
+type Transaction = {
+  id: string
+  fromUserId: string
+  toUserId: string
+  amount: number
+  description: string
+  status: string
+  createdAt: string
+  type: string
+  metadata?: {
+    senderName?: string
+    senderEmail?: string
+    senderPhone?: string
+  }
+}
+
 export default function DashboardPage() {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [allUsers, setAllUsers] = useState([])
+  const [allUsers, setAllUsers] = useState<User[]>([])
   const [showBalance, setShowBalance] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const { notifications, unreadCount } = useNotifications()
 
   useEffect(() => {
-    const userData = getCurrentUser()
-    if (!userData) {
-      router.push("/auth/login")
-      return
-    }
+    async function fetchData() {
+      try {
+        setIsLoading(true)
+        // Get current user from API or session
+        const userRes = await fetch("/api/current-user")
+        if (!userRes.ok) {
+          router.push("/auth/login")
+          return
+        }
+        const userData = await userRes.json()
+        setUser(userData)
 
-    setUser(userData)
-    const userTransactions = getUserTransactions(userData.id)
-    setTransactions(userTransactions.slice(0, 5)) // Show last 5 transactions
+        // Fetch all users
+        const usersRes = await fetch("/api/users")
+        const users = await usersRes.json()
+        setAllUsers(users)
 
-    const users = getAllUsers()
-    setAllUsers(users)
-    setIsLoading(false)
-
-    // Listen for real-time transaction updates
-    const handleTransactionUpdate = () => {
-      const updatedTransactions = getUserTransactions(userData.id)
-      setTransactions(updatedTransactions.slice(0, 5))
-
-      // Update user data to reflect balance changes
-      const updatedUser = getCurrentUser()
-      if (updatedUser) {
-        setUser(updatedUser)
+        // Fetch all transactions and filter for this user
+        const transactionsRes = await fetch("/api/transactions")
+        const allTransactions = await transactionsRes.json()
+        const userTransactions = allTransactions.filter(
+          (t: Transaction) => t.fromUserId === userData.id || t.toUserId === userData.id,
+        )
+        setTransactions(userTransactions.slice(0, 5))
+      } catch (error) {
+        // Optionally show an error toast or message
+        console.error("Dashboard fetch error:", error)
+        router.push("/auth/login")
+      } finally {
+        setIsLoading(false)
       }
     }
-
-    window.addEventListener("transactionAdded", handleTransactionUpdate)
-    window.addEventListener("transactionUpdated", handleTransactionUpdate)
-
-    return () => {
-      window.removeEventListener("transactionAdded", handleTransactionUpdate)
-      window.removeEventListener("transactionUpdated", handleTransactionUpdate)
-    }
+    fetchData()
   }, [router])
 
   const formatCurrency = (amount: number) => {
@@ -304,8 +330,20 @@ export default function DashboardPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium truncate">
-                            {transaction.toUserId === user.id ? "From" : "To"} {getOtherPartyName(transaction)}
+                            {transaction.type === "admin_credit"
+                              ? transaction.metadata?.senderName
+                                ? `From ${transaction.metadata.senderName}`
+                                : "From ADMIN"
+                              : transaction.toUserId === user.id
+                              ? `From ${getOtherPartyName(transaction)}`
+                              : `To ${getOtherPartyName(transaction)}`}
                           </p>
+                          {transaction.type === "admin_credit" && transaction.metadata?.senderEmail && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {transaction.metadata.senderEmail}
+                              {transaction.metadata.senderPhone ? ` • ${transaction.metadata.senderPhone}` : ""}
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground">{transaction.description}</p>
                         </div>
                         <div className="text-right">
